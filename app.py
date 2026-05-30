@@ -5,4 +5,4 @@ st.set_page_config(
     layout="wide"
 )
 
-st.switch_page("pages/Dashboard.py")
+st.switch_page("pages/dashboard.py")
