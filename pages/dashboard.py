@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-
+import plotly.graph_objects as go
 # =========================================================
 # PAGE CONFIG
 # =========================================================
@@ -364,12 +364,12 @@ with left_filter:
 
 
 # =====================
-# CHART TREN
+# CHART TREN HARIAN
 # =====================
 
 trend = (
-    filtered_df.groupby("Tanggal")
-    ["Jumlah Produk"]
+    filtered_df
+    .groupby("Tanggal")["Jumlah Produk"]
     .sum()
     .reset_index()
 )
@@ -381,6 +381,7 @@ fig1 = px.line(
     title="Tren Penjualan Harian",
     template="simple_white"
 )
+
 fig1.update_layout(
     paper_bgcolor="#E4EFF9",
     plot_bgcolor="#E4EFF9",
@@ -396,6 +397,7 @@ fig1.update_layout(
     ),
 
     xaxis=dict(
+        title="Tanggal",
         title_font=dict(color="black"),
         tickfont=dict(color="black"),
         showgrid=True,
@@ -403,41 +405,96 @@ fig1.update_layout(
     ),
 
     yaxis=dict(
+        title="Jumlah Produk",
         title_font=dict(color="black"),
         tickfont=dict(color="black"),
         showgrid=True,
         gridcolor="#405E8B"
     )
 )
+
 fig1.update_traces(
     line_color="#1E2487",
     line_width=3
 )
+
 with left_chart:
     st.plotly_chart(
         fig1,
         use_container_width=True
     )
 
-# =====================
-# CHART BULANAN
-# =====================
+# =========================================================
+# RATA-RATA PENJUALAN BULANAN PER TAHUN
+# SAMA PERSIS DENGAN NOTEBOOK
+# =========================================================
 
-bulanan = (
-    filtered_df.groupby("bulan")
-    ["Jumlah Produk"]
+daily_sales = (
+    filtered_df
+    .groupby("Tanggal")["Jumlah Produk"]
+    .sum()
+    .reset_index()
+)
+
+daily_sales["tahun"] = daily_sales["Tanggal"].dt.year
+daily_sales["bulan"] = daily_sales["Tanggal"].dt.month
+
+avg_bulanan_tahun = (
+    daily_sales
+    .groupby(["tahun", "bulan"])["Jumlah Produk"]
     .mean()
     .reset_index()
 )
 
-fig2 = px.bar(
-    bulanan,
-    x="bulan",
-    y="Jumlah Produk",
-    title="Rata-rata Penjualan per Bulan",
-    template="simple_white"
-)
+avg_bulanan_tahun.columns = [
+    "tahun",
+    "bulan",
+    "target"
+]
+
+fig2 = go.Figure()
+
+colors = [
+    "#A7C7E7",
+    "#F7C6C7",
+    "#B5EAD7"
+]
+
+for i, tahun in enumerate(
+    sorted(avg_bulanan_tahun["tahun"].unique())
+):
+
+    temp = avg_bulanan_tahun[
+        avg_bulanan_tahun["tahun"] == tahun
+    ]
+
+    fig2.add_trace(
+        go.Scatter(
+            x=temp["bulan"],
+            y=temp["target"],
+            mode="lines+markers",
+            name=str(tahun),
+
+            line=dict(
+                width=3,
+                color=colors[i]
+            ),
+
+            marker=dict(
+                size=7
+            )
+        )
+    )
+
 fig2.update_layout(
+    title="Rata-rata Penjualan Bulanan per Tahun",
+
+    xaxis_title="Bulan",
+    yaxis_title="Rata-rata Penjualan",
+
+    template="plotly_white",
+    hovermode="x unified",
+
     paper_bgcolor="#E4EFF9",
     plot_bgcolor="#E4EFF9",
 
@@ -451,6 +508,18 @@ fig2.update_layout(
         size=18
     ),
 
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="center",
+        x=0.5,
+        font=dict(
+            color="black",
+            size=12
+        )
+    ),
+
     xaxis=dict(
         title_font=dict(color="black"),
         tickfont=dict(color="black"),
@@ -462,12 +531,11 @@ fig2.update_layout(
         title_font=dict(color="black"),
         tickfont=dict(color="black"),
         showgrid=True,
-        gridcolor="#405E8B"
+        gridcolor="#8499B9"
     )
 )
-fig2.update_traces(
-marker_color="#45973A"
-)
+
+fig2.update_xaxes(dtick=1)
 
 with right_chart:
     st.plotly_chart(
@@ -577,24 +645,56 @@ with b2:
         use_container_width=True
     )
 
-# Per Outlet
-outlet_chart = (
-    filtered_df.groupby("Outlet")
-    ["Jumlah Produk"]
+# =========================================================
+# PENJUALAN PER OUTLET (LINE CHART)
+# =========================================================
+
+outlet_monthly = (
+    filtered_df
+    .groupby(["Outlet", "bulan"])["Jumlah Produk"]
     .sum()
     .reset_index()
 )
 
-fig5 = px.bar(
-    outlet_chart,
-    x="Outlet",
-    y="Jumlah Produk",
-    title="Penjualan per Outlet",
-    template="simple_white"
-   
+fig5 = go.Figure()
+
+colors = [
+    "#125A4A",
+    "#1E2487",
+    "#E67E22"
+]
+
+for i, outlet in enumerate(
+    outlet_monthly["Outlet"].unique()
+):
+
+    temp = outlet_monthly[
+        outlet_monthly["Outlet"] == outlet
+    ]
+
+    fig5.add_trace(
+        go.Scatter(
+            x=temp["bulan"],
+            y=temp["Jumlah Produk"],
+            mode="lines+markers",
+            name=outlet,
+
+            line=dict(
+                width=3,
+                color=colors[i % len(colors)]
+            ),
+
+            marker=dict(size=7)
+        )
     )
+
 fig5.update_layout(
-    title="Tren Penjualan Harian",
+    title="Tren Penjualan per Outlet",
+
+    xaxis_title="Bulan",
+    yaxis_title="Jumlah Produk",
+
+    template="plotly_white",
 
     paper_bgcolor="#E4EFF9",
     plot_bgcolor="#E4EFF9",
@@ -609,22 +709,26 @@ fig5.update_layout(
         size=18
     ),
 
+    legend=dict(
+        font=dict(
+            color="black",
+            size=12
+        )
+    ),
+
     xaxis=dict(
-        title="Tanggal",
         title_font=dict(color="black"),
         tickfont=dict(color="black"),
-        gridcolor="#D1D5DB"
+        showgrid=True,
+        gridcolor="#8499B9"
     ),
 
     yaxis=dict(
-        title="Jumlah Produk",
         title_font=dict(color="black"),
         tickfont=dict(color="black"),
-        gridcolor="#D1D5DB"
+        showgrid=True,
+        gridcolor="#8499B9"
     )
-)
-fig5.update_traces(
-    marker_color="#125A4A"
 )
 with b3:
     st.plotly_chart(

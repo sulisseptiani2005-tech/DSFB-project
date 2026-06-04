@@ -274,13 +274,51 @@ if produk != "Semua":
         filtered_df["Nama Produk"] == produk
     ]
 
+# =========================================================
+# DATA KHUSUS GRAFIK
+# =========================================================
+
+daily_chart = (
+    filtered_df
+    .groupby("Tanggal")["Jumlah Produk"]
+    .sum()
+    .reset_index()
+)
+
+daily_chart = daily_chart.sort_values(
+    "Tanggal"
+)
+
+daily_chart["lag_1"] = (
+    daily_chart["Jumlah Produk"]
+    .shift(1)
+)
+
+daily_chart["lag_7"] = (
+    daily_chart["Jumlah Produk"]
+    .shift(7)
+)
+
+daily_chart["rolling_mean_7"] = (
+    daily_chart["Jumlah Produk"]
+    .rolling(7)
+    .mean()
+)
+
+daily_chart["rolling_std_7"] = (
+    daily_chart["Jumlah Produk"]
+    .rolling(7)
+    .std()
+)
+
+daily_chart = daily_chart.dropna()
 
 # =========================================================
 # AGREGASI HARIAN
 # =========================================================
 
 daily = (
-    filtered_df
+    df
     .groupby("Tanggal")["Jumlah Produk"]
     .sum()
     .reset_index()
@@ -551,39 +589,146 @@ with left_filter:
         step=1,
         key="hari_prediksi"
     )
+
+# =========================================================
+# MODEL KHUSUS GRAFIK
+# =========================================================
+
+if len(daily_chart) > 30:
+
+    train_size_chart = int(
+        len(daily_chart) * 0.8
+    )
+
+    train_chart = daily_chart[
+        :train_size_chart
+    ]
+
+    test_chart = daily_chart[
+        train_size_chart:
+    ]
+
+    X_train_chart = train_chart[
+        features
+    ]
+
+    y_train_chart = train_chart[
+        "Jumlah Produk"
+    ]
+
+    X_test_chart = test_chart[
+        features
+    ]
+
+    y_test_chart = test_chart[
+        "Jumlah Produk"
+    ]
+
+    model_chart = XGBRegressor(
+        n_estimators=200,
+        learning_rate=0.05,
+        max_depth=5,
+        random_state=42
+    )
+
+    model_chart.fit(
+        X_train_chart,
+        y_train_chart
+    )
+
+    predictions_chart = (
+        model_chart.predict(
+            X_test_chart
+        )
+    )
+
+future_preds_chart = []
+
+last_values_chart = (
+    daily_chart["Jumlah Produk"]
+    .tail(7)
+    .tolist()
+)
+
+last_date_chart = (
+    daily_chart["Tanggal"]
+    .max()
+)
+
+for i in range(horizon):
+
+    lag_1 = last_values_chart[-1]
+    lag_7 = last_values_chart[-7]
+
+    rolling_mean = np.mean(
+        last_values_chart[-7:]
+    )
+
+    rolling_std = np.std(
+        last_values_chart[-7:]
+    )
+
+    X_future = pd.DataFrame({
+        "lag_1":[lag_1],
+        "lag_7":[lag_7],
+        "rolling_mean_7":[rolling_mean],
+        "rolling_std_7":[rolling_std]
+    })
+
+    pred = model_chart.predict(
+        X_future
+    )[0]
+
+    future_preds_chart.append(pred)
+
+    last_values_chart.append(pred)
+
+future_dates_chart = pd.date_range(
+    start=last_date_chart
+    + pd.Timedelta(days=1),
+    periods=horizon
+)
+
+future_df_chart = pd.DataFrame({
+    "Tanggal": future_dates_chart,
+    "Prediksi": future_preds_chart
+})
 # =========================================================
 # GRAFIK
 # =========================================================
-historical_days = horizon * 2
 
-actual_plot = test.tail(historical_days)
-
-pred_plot = predictions[-historical_days:]
 fig = go.Figure()
 
-fig.add_trace(go.Scatter(
-    x=test["Tanggal"],
-    y=y_test,
-    mode="lines",
-    name="Actual",
-    line=dict(color="#2563EB")
-))
+fig.add_trace(
+    go.Scatter(
+        x=test_chart["Tanggal"],
+        y=y_test_chart,
+        mode="lines",
+        name="Actual",
+        line=dict(color="#2563EB")
+    )
+)
 
-fig.add_trace(go.Scatter(
-    x=test["Tanggal"],
-    y=predictions,
-    mode="lines",
-    name="Predicted",
-    line=dict(color="#16A34A")
-))
+fig.add_trace(
+    go.Scatter(
+        x=test_chart["Tanggal"],
+        y=predictions_chart,
+        mode="lines",
+        name="Predicted",
+        line=dict(color="#16A34A")
+    )
+)
 
-fig.add_trace(go.Scatter(
-    x=future_df["Tanggal"],
-    y=future_df["Prediksi"],
-    mode="lines",
-    name="Forecast",
-    line=dict(color="#982222")
-))
+fig.add_trace(
+    go.Scatter(
+        x=future_df_chart["Tanggal"],
+        y=future_df_chart["Prediksi"],
+        mode="lines",
+        name="Forecast",
+        line=dict(color="#982222")
+    )
+)
+
 fig.update_layout(
     title="Grafik Historical Actual vs Predict",
     paper_bgcolor="#E4EFF9",
@@ -626,7 +771,6 @@ with right_chart:
         fig,
         use_container_width=True
     )
-
 # =========================================================
 # TABLE
 # =========================================================
@@ -636,11 +780,11 @@ st.subheader(
 )
 
 st.dataframe(
-    future_df,
+    future_df_chart,
     use_container_width=True
 )
 
-csv = future_df.to_csv(
+csv = future_df_chart.to_csv(
     index=False
 )
 
